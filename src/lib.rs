@@ -7,16 +7,28 @@
 extern crate alloc;
 use alloc::alloc::{Allocator, Global, Layout};
 
-use core::{marker::PhantomData, mem, ptr};
+use core::{mem, ptr};
 
 /// A heap allocated Merkle tree.
 pub struct HamTree<T, const H: usize, const A: usize, Alloc = Global> {
-    ptr: *mut u8,
+    ptr: *mut T,
     alloc: Alloc,
-    _marker: PhantomData<T>,
 }
 
 type Node<T> = Option<T>;
+
+/// Number of nodes in a tree.
+const fn n_tree_nodes<const H: usize, const A: usize>() -> usize {
+    let mut n_nodes = 1; // start with the root
+
+    let mut h = H;
+    while h > 0 {
+        n_nodes += tree_levels::<H, A>()[H - h];
+        h -= 1;
+    }
+
+    n_nodes
+}
 
 /// Returns the layout of a tree of the given height and arity, together with
 /// the number of nodes in the tree.
@@ -25,16 +37,13 @@ const fn node_layout<T, const H: usize, const A: usize>() -> Layout {
     let node_align = mem::align_of::<Node<T>>();
 
     let n_tree_nodes = n_tree_nodes::<H, A>();
-    let n_tree_leaves = n_tree_leaves::<H, A>();
-
-    let tree_size = node_size * (n_tree_nodes + n_tree_leaves);
+    let tree_size = node_size * n_tree_nodes;
 
     unsafe { Layout::from_size_align_unchecked(tree_size, node_align) }
 }
 
-/// An array of number of nodes - that are *not leaves* - in a tree of the
-/// given height and arity, counting from the level closest to the leaves up
-/// to the root.
+/// Number of nodes in all levels of a tree of the given height and arity,
+/// ordered from the leaves up to, but excluding, the root.
 const fn tree_levels<const H: usize, const A: usize>() -> [usize; H] {
     let mut n_nodes = [0; H];
 
@@ -48,25 +57,6 @@ const fn tree_levels<const H: usize, const A: usize>() -> [usize; H] {
     n_nodes
 }
 
-/// Number of nodes in a tree that are *not leaves*.
-const fn n_tree_nodes<const H: usize, const A: usize>() -> usize {
-    let mut n_nodes = 0;
-
-    let mut h = H;
-    while h > 0 {
-        n_nodes += tree_levels::<H, A>()[H - h];
-        h -= 1;
-    }
-
-    n_nodes
-}
-
-/// Number of leaves in a tree with a certain height.
-const fn n_tree_leaves<const H: usize, const A: usize>() -> usize {
-    #[allow(clippy::cast_possible_truncation)]
-    A.pow(H as u32)
-}
-
 impl<T, const H: usize, const A: usize> HamTree<T, H, A> {
     /// Construct a new, empty `HamTree<T, H, A>`.
     ///
@@ -76,7 +66,6 @@ impl<T, const H: usize, const A: usize> HamTree<T, H, A> {
         Self {
             ptr: ptr::null_mut(),
             alloc: Global,
-            _marker: PhantomData,
         }
     }
 }
@@ -85,11 +74,14 @@ impl<T, const H: usize, const A: usize, Alloc: Allocator>
     HamTree<T, H, A, Alloc>
 {
     const LAYOUT: Layout = node_layout::<T, H, A>();
-
-    const N_NODES: usize = n_tree_nodes::<H, A>();
-    const N_LEAVES: usize = n_tree_leaves::<H, A>();
-
     const LEVELS: [usize; H] = tree_levels::<H, A>();
+
+    // Indexing the level array at 0 means that `H` can never be 0, which allows
+    // us to optimize a check away at insertion. That check would have been
+    // between inserting directly at the root or not.
+
+    /// The maximum number of leaves a tree can hold.
+    pub const N_LEAVES: usize = Self::LEVELS[0];
 
     /// Construct a new, empty `HamTree<T, H, A>`.
     ///
@@ -99,7 +91,6 @@ impl<T, const H: usize, const A: usize, Alloc: Allocator>
         Self {
             ptr: ptr::null_mut(),
             alloc,
-            _marker: PhantomData,
         }
     }
 
@@ -116,28 +107,32 @@ impl<T, const H: usize, const A: usize, Alloc: Allocator>
                 Ok(ptr) => ptr,
                 Err(err) => panic!("Allocation error: {err}"),
             };
-            self.ptr = ptr.as_mut_ptr();
+            self.ptr = ptr.as_ptr().cast();
         }
 
-        todo!("decide on how to lay out the tree")
+        // safety: this dereferences memory that was just allocated previously
+        let popped = unsafe {
+            let mut leaf = Some(leaf);
+
+            let ptr = self.ptr.add(index);
+            let leaf_ref = &mut *ptr.cast::<Node<T>>();
+
+            mem::swap(leaf_ref, &mut leaf);
+
+            leaf
+        };
+
+        todo!("update the tree's hashes");
+
+        popped
     }
 
     /// The maximum number of leaves the tree can hold.
     ///
-    /// This number is the same as [`n_leaves`].
+    /// This number is the same as [`N_LEAVES`].
     ///
-    /// [`n_leaves`]: Self::n_leaves
+    /// [`N_LEAVES`]: Self::N_LEAVES
     pub const fn capacity(&self) -> usize {
-        Self::n_leaves()
-    }
-
-    /// The maximum number of leaves a tree can hold.
-    ///
-    /// This number is the same as [`capacity`].
-    ///
-    /// [`capacity`]: Self::capacity
-    #[must_use]
-    pub const fn n_leaves() -> usize {
         Self::N_LEAVES
     }
 }
