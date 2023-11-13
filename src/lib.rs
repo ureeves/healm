@@ -17,17 +17,18 @@ pub struct HamTree<T, const H: u32, const A: usize, Alloc = Global> {
 
 type Node<T> = Option<T>;
 
+/// Number of leaves in a tree with the given height and arity.
 const fn n_tree_leaves(height: u32, arity: usize) -> usize {
     arity.pow(height)
 }
 
-/// Number of nodes in a tree.
+/// Total number of nodes in a tree with the given height and arity.
 const fn n_tree_nodes(height: u32, arity: usize) -> usize {
     let mut n_nodes = 0;
 
     let mut h = 0;
     while h <= height {
-        n_nodes += n_tree_leaves(height, arity);
+        n_nodes += n_tree_leaves(h, arity);
         h += 1;
     }
 
@@ -116,13 +117,13 @@ where
 
             // Propagate changes towards the root
             let mut n_nodes = Self::N_LEAVES;
-            for _ in 0..H {
+            for _ in 0..=H {
                 let next_level_ptr = level_ptr.add(n_nodes);
 
                 let next_n_nodes = n_nodes / A;
                 let next_index = index / A;
 
-                let siblings_index = A * (index / A);
+                let siblings_index = index - (index % A);
                 let siblings_ptr = level_ptr.add(siblings_index);
                 let siblings = siblings_ptr.cast();
 
@@ -198,8 +199,6 @@ mod tests {
         for i in 0..Tree::N_LEAVES {
             tree.insert(i, Count(1));
         }
-
-        println!("{:?}", tree.root());
 
         assert!(matches!(tree.root(), Some(Count(Tree::N_LEAVES))));
     }
