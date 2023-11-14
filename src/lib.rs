@@ -21,6 +21,15 @@ pub trait Aggregate: Sized {
     fn aggregate(nodes: &[Option<Self>]) -> Self;
 }
 
+unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Send
+    for HamTree<T, H, A, Alloc>
+{
+}
+unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Sync
+    for HamTree<T, H, A, Alloc>
+{
+}
+
 /// A heap allocated Merkle tree.
 pub struct HamTree<T, const H: u32, const A: usize, Alloc: Allocator = Global> {
     base: *mut Node<T>,
