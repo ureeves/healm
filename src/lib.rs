@@ -95,7 +95,7 @@ where
 
             // Propagate changes towards the root
             let mut n_nodes = Self::N_LEAVES;
-            for _ in 0..=H {
+            for _ in 0..H {
                 let next_level_ptr = level_ptr.add(n_nodes);
 
                 let next_n_nodes = n_nodes / A;
