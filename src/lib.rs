@@ -15,15 +15,23 @@ use core::{
     slice,
 };
 
-/// Types that can be aggregated to produce a new value.
+/// Types that can be nodes in a `HamTree`. `Aggregate`s can be aggregated to
+/// produce a new node.
 ///
 /// `Aggregate` types must be `PartialEq`, since comparison is used to determine
-/// whether a `HamTree` node is empty or not.
-pub trait Aggregate: PartialEq + Sized {
-    /// The value to be used in place of an empty node.
-    const EMPTY: Self;
+/// whether a `HamTree` node is zeroed or not.
+///
+/// # Safety
+/// The implementer must ensure that the type is safely zeroable. If
+/// [`mem::zeroed`] is safe to call on the type, then it is also safe to
+/// implement `Aggregate`.
+pub unsafe trait Aggregate: PartialEq + Sized {
     /// Aggregate the given nodes into a new node.
     fn aggregate(nodes: &[Self]) -> Self;
+}
+
+fn empty_node<T: Aggregate>() -> T {
+    unsafe { mem::zeroed() }
 }
 
 unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Send
@@ -129,7 +137,7 @@ where
                 level_ptr = next_level_ptr;
             }
 
-            if leaf == T::EMPTY {
+            if leaf == empty_node() {
                 None
             } else {
                 Some(leaf)
@@ -138,7 +146,7 @@ where
     }
 
     fn filter_leaf(node: &T) -> Option<&T> {
-        if *node == T::EMPTY {
+        if *node == unsafe { mem::zeroed::<T>() } {
             None
         } else {
             Some(node)
@@ -175,7 +183,7 @@ where
             let root_ptr = self.base.add(n_tree_nodes(H, A) - 1);
             let root = &*root_ptr.cast::<T>();
 
-            if *root == T::EMPTY {
+            if *root == empty_node() {
                 None
             } else {
                 Some(root)
@@ -199,34 +207,8 @@ where
     /// Panics if the underlying allocator fails.
     fn ensure_allocated(&mut self) {
         if self.is_unallocated() {
-            match self.alloc.allocate(Self::LAYOUT) {
-                Ok(ptr) => {
-                    self.base = ptr.as_ptr().cast();
-
-                    // safety: we just allocated the memory, so we can
-                    // de-reference it safely.
-                    unsafe {
-                        *self.base = T::EMPTY;
-
-                        let mut ptr = self.base;
-                        let mut count = 1;
-
-                        for _ in 0..H {
-                            let next_ptr = ptr.add(count);
-
-                            for a in 0..A {
-                                ptr::copy_nonoverlapping(
-                                    ptr,
-                                    next_ptr.add(a * count),
-                                    count,
-                                );
-                            }
-
-                            count *= A;
-                            ptr = next_ptr;
-                        }
-                    }
-                }
+            match self.alloc.allocate_zeroed(Self::LAYOUT) {
+                Ok(ptr) => self.base = ptr.as_ptr().cast(),
                 Err(err) => panic!("HamTree failed allocation: {err}"),
             }
         }
@@ -292,9 +274,7 @@ mod tests {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     struct Count(usize);
 
-    impl Aggregate for Count {
-        const EMPTY: Self = Count(0);
-
+    unsafe impl Aggregate for Count {
         fn aggregate(nodes: &[Self]) -> Self {
             let mut sum = 0;
             for node in nodes {
