@@ -5,6 +5,8 @@
 #![feature(allocator_api)]
 
 extern crate alloc;
+extern crate core;
+
 use alloc::alloc::{Allocator, Global, Layout};
 
 use core::{
@@ -13,12 +15,15 @@ use core::{
     slice,
 };
 
-type Node<T> = Option<T>;
-
 /// Types that can be aggregated to produce a new value.
-pub trait Aggregate: Sized {
+///
+/// `Aggregate` types must be `PartialEq`, since comparison is used to determine
+/// whether a `HamTree` node is empty or not.
+pub trait Aggregate: PartialEq + Sized {
+    /// The value to be used in place of an empty node.
+    const EMPTY: Self;
     /// Aggregate the given nodes into a new node.
-    fn aggregate(nodes: &[Option<Self>]) -> Self;
+    fn aggregate(nodes: &[Self]) -> Self;
 }
 
 unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Send
@@ -32,7 +37,7 @@ unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Sync
 
 /// A heap allocated Merkle tree.
 pub struct HamTree<T, const H: u32, const A: usize, Alloc: Allocator = Global> {
-    base: *mut Node<T>,
+    base: *mut T,
     alloc: Alloc,
 }
 
@@ -99,10 +104,9 @@ where
             let mut index = index;
 
             // Modify the leaf node
-            let mut leaf = Some(leaf);
-            let node_ptr = level_ptr.add(index);
-            let node = &mut *node_ptr.cast();
-            mem::swap(node, &mut leaf);
+            let mut leaf = leaf;
+            let leaf_ptr = level_ptr.add(index);
+            ptr::swap(leaf_ptr, &mut leaf);
 
             // Propagate changes towards the root
             let mut n_nodes = Self::N_LEAVES;
@@ -114,11 +118,10 @@ where
 
                 let siblings_index = index - (index % A);
                 let siblings_ptr = level_ptr.add(siblings_index);
-                let siblings: *const [Node<T>; A] = siblings_ptr.cast();
+                let siblings: *const [T; A] = siblings_ptr.cast();
 
-                let new_parent = T::aggregate(&*siblings);
                 let parent_ptr = next_level_ptr.add(next_index);
-                *parent_ptr = Some(new_parent);
+                *parent_ptr = T::aggregate(&*siblings);
 
                 index = next_index;
                 n_nodes = next_n_nodes;
@@ -126,12 +129,20 @@ where
                 level_ptr = next_level_ptr;
             }
 
-            leaf
+            if leaf == T::EMPTY {
+                None
+            } else {
+                Some(leaf)
+            }
         }
     }
 
-    fn filter_leaf(node: &Node<T>) -> Option<&T> {
-        node.as_ref()
+    fn filter_leaf(node: &T) -> Option<&T> {
+        if *node == T::EMPTY {
+            None
+        } else {
+            Some(node)
+        }
     }
 
     /// Returns an iterator over the leaves of the tree.
@@ -162,8 +173,13 @@ where
         // the root is safe.
         unsafe {
             let root_ptr = self.base.add(n_tree_nodes(H, A) - 1);
-            let root = &*root_ptr.cast::<Node<T>>();
-            root.as_ref()
+            let root = &*root_ptr.cast::<T>();
+
+            if *root == T::EMPTY {
+                None
+            } else {
+                Some(root)
+            }
         }
     }
 
@@ -190,7 +206,7 @@ where
                     // safety: we just allocated the memory, so we can
                     // de-reference it safely.
                     unsafe {
-                        *self.base = None;
+                        *self.base = T::EMPTY;
 
                         let mut ptr = self.base;
                         let mut count = 1;
@@ -237,8 +253,8 @@ where
 }
 
 const fn tree_layout<T>(height: u32, arity: usize) -> Layout {
-    let node_size = mem::size_of::<Node<T>>();
-    let node_align = mem::align_of::<Node<T>>();
+    let node_size = mem::size_of::<T>();
+    let node_align = mem::align_of::<T>();
 
     let size = n_tree_nodes(height, arity) * node_size;
     let align = node_align;
@@ -277,9 +293,13 @@ mod tests {
     struct Count(usize);
 
     impl Aggregate for Count {
-        fn aggregate(nodes: &[Option<Self>]) -> Self {
+        const EMPTY: Self = Count(0);
+
+        fn aggregate(nodes: &[Self]) -> Self {
             let mut sum = 0;
-            nodes.iter().flatten().for_each(|node| sum += node.0);
+            for node in nodes {
+                sum += node.0;
+            }
             Self(sum)
         }
     }
