@@ -10,6 +10,7 @@ use alloc::alloc::{Allocator, Global, Layout};
 use core::{
     mem,
     ptr::{self, NonNull},
+    slice,
 };
 
 type Node<T> = Option<T>;
@@ -117,6 +118,25 @@ where
             }
 
             leaf
+        }
+    }
+
+    fn filter_leaf(node: &Node<T>) -> Option<&T> {
+        node.as_ref()
+    }
+
+    /// Returns an iterator over the leaves of the tree.
+    pub fn leaves(&self) -> impl Iterator<Item = &T> {
+        if self.is_unallocated() {
+            return [].iter().filter_map(Self::filter_leaf);
+        }
+
+        // safety: we check that the tree is allocated above, so de-referencing
+        // is safe.
+        unsafe {
+            slice::from_raw_parts(self.base, Self::N_LEAVES)
+                .iter()
+                .filter_map(Self::filter_leaf)
         }
     }
 
@@ -252,11 +272,12 @@ mod tests {
     }
 
     // A macro that generates test cases for the given arity and height.
-    macro_rules! insertion {
+    macro_rules! tree_tests {
         ($height:literal, $arity:literal) => {
             paste! {
-                #[test]
-                fn [<insertion _ $height _ $arity>]() {
+                mod [<tree _ $height _ $arity>] {
+                    use super::*;
+
                     type Tree = HamTree<Count, $height, $arity>;
 
                     struct TestCase {
@@ -284,42 +305,70 @@ mod tests {
                         TestCase::new(8),
                     ];
 
-                    let mut tree = HamTree::<Count, $height, $arity>::new();
+                    #[test]
+                    fn insertion() {
+                        let mut tree = Tree::new();
 
-                    for case in TEST_CASES {
-                        for i in 0..Tree::N_LEAVES {
-                            tree.insert(i, case.count);
+                        for case in TEST_CASES {
+                            for i in 0..Tree::N_LEAVES {
+                                tree.insert(i, case.count);
+                            }
+
+                            assert!(matches!(tree.root(), Some(x) if *x == case.expected_root));
                         }
+                    }
 
-                        assert!(matches!(tree.root(), Some(x) if *x == case.expected_root));
+                    #[test]
+                    fn leaves() {
+                        let mut tree = Tree::new();
+
+                        for case in TEST_CASES {
+                            for i in 0..Tree::N_LEAVES {
+                                tree.insert(i, case.count);
+                            }
+
+                            let mut leaf_count = 0;
+                            for leaf in tree.leaves() {
+                                assert_eq!(*leaf, case.count);
+                                leaf_count += 1;
+                            }
+
+                            assert_eq!(leaf_count, Tree::N_LEAVES);
+                        }
+                    }
+
+                    #[test]
+                    fn leaves_empty() {
+                        let tree = Tree::new();
+                        assert_eq!(tree.leaves().count(), 0);
                     }
                 }
             }
         };
     }
 
-    insertion!(0, 2);
-    insertion!(1, 2);
-    insertion!(2, 2);
-    insertion!(3, 2);
-    insertion!(4, 2);
-    insertion!(5, 2);
-    insertion!(6, 2);
-    insertion!(7, 2);
-    insertion!(0, 3);
-    insertion!(1, 3);
-    insertion!(2, 3);
-    insertion!(3, 3);
-    insertion!(4, 3);
-    insertion!(5, 3);
-    insertion!(6, 3);
-    insertion!(7, 3);
-    insertion!(0, 4);
-    insertion!(1, 4);
-    insertion!(2, 4);
-    insertion!(3, 4);
-    insertion!(4, 4);
-    insertion!(5, 4);
-    insertion!(6, 4);
-    insertion!(7, 4);
+    tree_tests!(0, 2);
+    tree_tests!(1, 2);
+    tree_tests!(2, 2);
+    tree_tests!(3, 2);
+    tree_tests!(4, 2);
+    tree_tests!(5, 2);
+    tree_tests!(6, 2);
+    tree_tests!(7, 2);
+    tree_tests!(0, 3);
+    tree_tests!(1, 3);
+    tree_tests!(2, 3);
+    tree_tests!(3, 3);
+    tree_tests!(4, 3);
+    tree_tests!(5, 3);
+    tree_tests!(6, 3);
+    tree_tests!(7, 3);
+    tree_tests!(0, 4);
+    tree_tests!(1, 4);
+    tree_tests!(2, 4);
+    tree_tests!(3, 4);
+    tree_tests!(4, 4);
+    tree_tests!(5, 4);
+    tree_tests!(6, 4);
+    tree_tests!(7, 4);
 }
