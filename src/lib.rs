@@ -72,7 +72,8 @@ where
     /// element occupying the position, if any.
     ///
     /// # Panics
-    /// Panics if `index >= capacity`.
+    /// Panics if `index >= capacity`, or the underlying allocator fails if it
+    /// is the first insertion.
     pub fn insert(&mut self, index: usize, leaf: T) -> Option<T> {
         assert!(index < Self::N_LEAVES, "Index out of bounds");
 
@@ -127,6 +128,7 @@ where
         if self.is_unallocated() {
             return None;
         }
+
         // safety: we check that the tree is allocated above, so de-referencing
         // the root is safe.
         unsafe {
@@ -236,6 +238,7 @@ const fn n_tree_nodes(height: u32, arity: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use paste::paste;
 
     #[derive(Debug, Clone, Copy, PartialEq)]
     struct Count(usize);
@@ -248,46 +251,75 @@ mod tests {
         }
     }
 
-    #[test]
-    fn insertion() {
-        const H: u32 = 3;
-        const A: usize = 2;
+    // A macro that generates test cases for the given arity and height.
+    macro_rules! insertion {
+        ($height:literal, $arity:literal) => {
+            paste! {
+                #[test]
+                fn [<insertion _ $height _ $arity>]() {
+                    type Tree = HamTree<Count, $height, $arity>;
 
-        type Tree = HamTree<Count, H, A>;
+                    struct TestCase {
+                        count: Count,
+                        expected_root: Count,
+                    }
 
-        struct TestCase {
-            count: Count,
-            expected_root: Count,
-        }
+                    impl TestCase {
+                        const fn new(count: usize) -> Self {
+                            Self {
+                                count: Count(count),
+                                expected_root: Count(count * Tree::N_LEAVES),
+                            }
+                        }
+                    }
 
-        impl TestCase {
-            const fn new(count: usize) -> Self {
-                Self {
-                    count: Count(count),
-                    expected_root: Count(count * Tree::N_LEAVES),
+                    const TEST_CASES: [TestCase; 8] = [
+                        TestCase::new(1),
+                        TestCase::new(2),
+                        TestCase::new(3),
+                        TestCase::new(4),
+                        TestCase::new(5),
+                        TestCase::new(6),
+                        TestCase::new(7),
+                        TestCase::new(8),
+                    ];
+
+                    let mut tree = HamTree::<Count, $height, $arity>::new();
+
+                    for case in TEST_CASES {
+                        for i in 0..Tree::N_LEAVES {
+                            tree.insert(i, case.count);
+                        }
+
+                        assert!(matches!(tree.root(), Some(x) if *x == case.expected_root));
+                    }
                 }
             }
-        }
-
-        const TEST_CASES: [TestCase; 8] = [
-            TestCase::new(1),
-            TestCase::new(2),
-            TestCase::new(3),
-            TestCase::new(4),
-            TestCase::new(5),
-            TestCase::new(6),
-            TestCase::new(7),
-            TestCase::new(8),
-        ];
-
-        let mut tree = HamTree::<Count, H, A>::new();
-
-        for case in TEST_CASES {
-            for i in 0..Tree::N_LEAVES {
-                tree.insert(i, case.count);
-            }
-
-            assert!(matches!(tree.root(), Some(x) if *x == case.expected_root));
-        }
+        };
     }
+
+    insertion!(0, 2);
+    insertion!(1, 2);
+    insertion!(2, 2);
+    insertion!(3, 2);
+    insertion!(4, 2);
+    insertion!(5, 2);
+    insertion!(6, 2);
+    insertion!(7, 2);
+    insertion!(0, 3);
+    insertion!(1, 3);
+    insertion!(2, 3);
+    insertion!(3, 3);
+    insertion!(4, 3);
+    insertion!(5, 3);
+    insertion!(6, 3);
+    insertion!(7, 3);
+    insertion!(0, 4);
+    insertion!(1, 4);
+    insertion!(2, 4);
+    insertion!(3, 4);
+    insertion!(4, 4);
+    insertion!(5, 4);
+    insertion!(6, 4);
+    insertion!(7, 4);
 }
