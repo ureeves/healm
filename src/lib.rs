@@ -267,9 +267,13 @@ const fn n_tree_nodes(height: u32, arity: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use paste::paste;
 
-    #[derive(Debug, Clone, Copy, PartialEq)]
+    use alloc::collections::BTreeSet;
+
+    use paste::paste;
+    use rand::{rngs::StdRng, RngCore, SeedableRng};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     struct Count(usize);
 
     impl Aggregate for Count {
@@ -282,68 +286,48 @@ mod tests {
 
     // A macro that generates test cases for the given arity and height.
     macro_rules! tree_tests {
-        ($height:literal, $arity:literal) => {
+        (H=$height:literal; A = $($arity:literal),+) => {
+            $(
             paste! {
-                mod [<tree _ $height _ $arity>] {
+                mod [<tree _ h $height _ a $arity>] {
                     use super::*;
 
                     type Tree = HamTree<Count, $height, $arity>;
 
-                    struct TestCase {
-                        count: Count,
-                        expected_root: Count,
-                    }
-
-                    impl TestCase {
-                        const fn new(count: usize) -> Self {
-                            Self {
-                                count: Count(count),
-                                expected_root: Count(count * Tree::N_LEAVES),
-                            }
-                        }
-                    }
-
-                    const TEST_CASES: [TestCase; 8] = [
-                        TestCase::new(1),
-                        TestCase::new(2),
-                        TestCase::new(3),
-                        TestCase::new(4),
-                        TestCase::new(5),
-                        TestCase::new(6),
-                        TestCase::new(7),
-                        TestCase::new(8),
-                    ];
+                    const N_INSERTIONS: usize = 100;
 
                     #[test]
                     fn insertion() {
+                        let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
+
                         let mut tree = Tree::new();
+                        let mut index_set = BTreeSet::new();
 
-                        for case in TEST_CASES {
-                            for i in 0..Tree::N_LEAVES {
-                                tree.insert(i, case.count);
-                            }
-
-                            assert!(matches!(tree.root(), Some(x) if *x == case.expected_root));
+                        for _ in 0..N_INSERTIONS {
+                            let i = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
+                            index_set.insert(i);
+                            tree.insert(i, Count(1));
                         }
+
+                        let n_insertions = index_set.len();
+                        assert!(matches!(tree.root(), Some(x) if *x == Count(n_insertions)));
                     }
 
                     #[test]
                     fn leaves() {
                         let mut tree = Tree::new();
 
-                        for case in TEST_CASES {
-                            for i in 0..Tree::N_LEAVES {
-                                tree.insert(i, case.count);
-                            }
-
-                            let mut leaf_count = 0;
-                            for leaf in tree.leaves() {
-                                assert_eq!(*leaf, case.count);
-                                leaf_count += 1;
-                            }
-
-                            assert_eq!(leaf_count, Tree::N_LEAVES);
+                        for i in 0..Tree::N_LEAVES {
+                            tree.insert(i, Count(1));
                         }
+
+                        let mut leaf_count = 0;
+                        for leaf in tree.leaves() {
+                            assert_eq!(*leaf, Count(1));
+                            leaf_count += 1;
+                        }
+
+                        assert_eq!(leaf_count, Tree::N_LEAVES);
                     }
 
                     #[test]
@@ -353,31 +337,17 @@ mod tests {
                     }
                 }
             }
+            )+
         };
     }
 
-    tree_tests!(0, 2);
-    tree_tests!(1, 2);
-    tree_tests!(2, 2);
-    tree_tests!(3, 2);
-    tree_tests!(4, 2);
-    tree_tests!(5, 2);
-    tree_tests!(6, 2);
-    tree_tests!(7, 2);
-    tree_tests!(0, 3);
-    tree_tests!(1, 3);
-    tree_tests!(2, 3);
-    tree_tests!(3, 3);
-    tree_tests!(4, 3);
-    tree_tests!(5, 3);
-    tree_tests!(6, 3);
-    tree_tests!(7, 3);
-    tree_tests!(0, 4);
-    tree_tests!(1, 4);
-    tree_tests!(2, 4);
-    tree_tests!(3, 4);
-    tree_tests!(4, 4);
-    tree_tests!(5, 4);
-    tree_tests!(6, 4);
-    tree_tests!(7, 4);
+    tree_tests!(H = 0; A = 2, 3, 4, 5);
+    tree_tests!(H = 1; A = 2, 3, 4, 5);
+    tree_tests!(H = 2; A = 2, 3, 4, 5);
+    tree_tests!(H = 3; A = 2, 3, 4, 5);
+    tree_tests!(H = 4; A = 2, 3, 4, 5);
+    tree_tests!(H = 5; A = 2, 3, 4, 5);
+    tree_tests!(H = 6; A = 2, 3, 4, 5);
+    tree_tests!(H = 7; A = 2, 3, 4, 5);
+    tree_tests!(H = 8; A = 2, 3, 4, 5);
 }
