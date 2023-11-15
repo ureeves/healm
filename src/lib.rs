@@ -3,6 +3,7 @@
 #![deny(clippy::pedantic)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![feature(allocator_api)]
+#![cfg_attr(feature = "test", feature(test))]
 
 extern crate alloc;
 extern crate core;

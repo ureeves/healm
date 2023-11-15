@@ -9,3 +9,6 @@ blake3 = { version = "1", optional = true }
 [dev-dependencies]
 paste = "1"
 rand = "0.8"
+
+[features]
+test = []
