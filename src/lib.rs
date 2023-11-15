@@ -15,6 +15,9 @@ use core::{
     slice,
 };
 
+#[cfg(feature = "blake3")]
+mod blake3;
+
 /// Types that can be nodes in a `HamTree`. `Aggregate`s can be aggregated to
 /// produce a new node.
 ///
