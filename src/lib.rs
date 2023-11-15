@@ -149,7 +149,7 @@ where
         }
     }
 
-    fn filter_leaf(node: &T) -> Option<&T> {
+    fn empty(node: &T) -> Option<&T> {
         if *node == unsafe { mem::zeroed::<T>() } {
             None
         } else {
@@ -157,10 +157,26 @@ where
         }
     }
 
+    /// Returns the leaf at the given index, if any.
+    pub fn get(&self, index: usize) -> Option<&T> {
+        if self.is_unallocated() {
+            return None;
+        }
+
+        // safety: we check that the tree is allocated above, so de-referencing
+        // is safe.
+        unsafe {
+            let leaf_ptr = self.base.add(index);
+            let leaf = &*leaf_ptr.cast::<T>();
+
+            Self::empty(leaf)
+        }
+    }
+
     /// Returns an iterator over the leaves of the tree.
     pub fn leaves(&self) -> impl Iterator<Item = &T> {
         if self.is_unallocated() {
-            return [].iter().filter_map(Self::filter_leaf);
+            return [].iter().filter_map(Self::empty);
         }
 
         // safety: we check that the tree is allocated above, so de-referencing
@@ -168,7 +184,7 @@ where
         unsafe {
             slice::from_raw_parts(self.base, Self::N_LEAVES)
                 .iter()
-                .filter_map(Self::filter_leaf)
+                .filter_map(Self::empty)
         }
     }
 
@@ -318,10 +334,39 @@ mod tests {
                     }
 
                     #[test]
-                    fn leaves() {
-                        let mut tree = Tree::new();
+                    fn get() {
+                        let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
 
-                        for i in 0..Tree::N_LEAVES {
+                        let mut tree = Tree::new();
+                        let mut index_set = BTreeSet::new();
+
+                        for _ in 0..N_INSERTIONS {
+                            let i = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
+                            index_set.insert(i);
+                            tree.insert(i, Count(1));
+                        }
+
+                        for i in index_set {
+                            assert_eq!(tree.get(i), Some(&Count(1)));
+                        }
+                    }
+
+                    #[test]
+                    fn get_empty() {
+                        let tree = Tree::new();
+                        assert_eq!(tree.get(0), None);
+                    }
+
+                    #[test]
+                    fn leaves() {
+                        let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
+
+                        let mut tree = Tree::new();
+                        let mut index_set = BTreeSet::new();
+
+                        for _ in 0..N_INSERTIONS {
+                            let i = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
+                            index_set.insert(i);
                             tree.insert(i, Count(1));
                         }
 
@@ -331,7 +376,8 @@ mod tests {
                             leaf_count += 1;
                         }
 
-                        assert_eq!(leaf_count, Tree::N_LEAVES);
+                        let n_insertions = index_set.len();
+                        assert_eq!(leaf_count, n_insertions);
                     }
 
                     #[test]
