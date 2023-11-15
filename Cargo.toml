@@ -11,6 +11,8 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+exclude = ["/docs", "/.github", ".gitignore"]
+
 [dependencies]
 blake3 = { version = "1", default-features = false, optional = true }
 
