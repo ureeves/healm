@@ -1,7 +1,15 @@
 [package]
 name = "healm"
+description = """**He**ap **al**located **me**rkle tree"""
+categories = ["cryptography", "data-structures", "no-std"]
+keywords = ["merkle", "tree", "hash", "data", "structure"]
+
+repository = "https://github.com/ureeves/healm"
+authors = ["Eduardo Leegwater Simões <eduardols@protonmail.com>"]
 version = "0.1.0"
+
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 blake3 = { version = "1", default-features = false, optional = true }
