@@ -25,4 +25,4 @@ jobs:
                 echo "Version mismatch: Cargo.toml version is $version, but workflow input version is ${{ inputs.version }}"
                 exit 1
             fi
-      - run: cargo publish --token ${{ secrets.crates-io-token }} --dry-run
+      - run: cargo publish --token ${{ secrets.crates-io-token }}
