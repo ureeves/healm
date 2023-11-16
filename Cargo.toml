@@ -22,3 +22,7 @@ rand = "0.8"
 
 [features]
 test = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

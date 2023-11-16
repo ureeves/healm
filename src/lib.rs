@@ -3,6 +3,7 @@
 #![deny(clippy::pedantic)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![feature(allocator_api)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "test", feature(test))]
 
 extern crate alloc;
@@ -17,6 +18,7 @@ use core::{
 };
 
 #[cfg(feature = "blake3")]
+#[cfg_attr(docsrs, doc(cfg(feature = "blake3")))]
 mod blake3;
 
 /// Types that can be nodes in a `HamTree`. `Aggregate`s can be aggregated to
