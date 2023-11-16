@@ -5,6 +5,7 @@
 #![feature(allocator_api)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "test", feature(test))]
+#![no_std]
 
 extern crate alloc;
 extern crate core;
