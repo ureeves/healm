@@ -32,7 +32,7 @@ mod blake3;
 /// The implementer must ensure that the type is safely zeroable. If
 /// [`mem::zeroed`] is safe to call on the type, then it is also safe to
 /// implement `Aggregate`.
-pub unsafe trait Aggregate: PartialEq + Sized {
+pub unsafe trait Aggregate: Eq + Sized {
     /// Aggregate the given nodes into a new node.
     fn aggregate(nodes: &[Self]) -> Self;
 }
