@@ -161,7 +161,7 @@ where
     }
 
     /// Returns the leaf at the given index, if any.
-    pub fn get(&self, index: usize) -> Option<&T> {
+    pub fn leaf(&self, index: usize) -> Option<&T> {
         if self.is_unallocated() {
             return None;
         }
@@ -350,14 +350,14 @@ mod tests {
                         }
 
                         for i in index_set {
-                            assert_eq!(tree.get(i), Some(&Count(1)));
+                            assert_eq!(tree.leaf(i), Some(&Count(1)));
                         }
                     }
 
                     #[test]
                     fn get_empty() {
                         let tree = Tree::new();
-                        assert_eq!(tree.get(0), None);
+                        assert_eq!(tree.leaf(0), None);
                     }
 
                     #[test]
