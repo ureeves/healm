@@ -12,7 +12,7 @@ unsafe impl Aggregate for Hash {
     }
 }
 
-#[cfg(all(test, feature = "test"))]
+#[cfg(all(test, feature = "bench"))]
 mod benches {
     use super::*;
 
