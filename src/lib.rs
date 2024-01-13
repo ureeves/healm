@@ -41,22 +41,23 @@ fn empty_node<T: Aggregate>() -> T {
     unsafe { mem::zeroed() }
 }
 
-unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Send
+unsafe impl<T, const H: usize, const A: usize, Alloc: Allocator> Send
     for HamTree<T, H, A, Alloc>
 {
 }
-unsafe impl<T, const H: u32, const A: usize, Alloc: Allocator> Sync
+unsafe impl<T, const H: usize, const A: usize, Alloc: Allocator> Sync
     for HamTree<T, H, A, Alloc>
 {
 }
 
 /// A heap allocated Merkle tree.
-pub struct HamTree<T, const H: u32, const A: usize, Alloc: Allocator = Global> {
+pub struct HamTree<T, const H: usize, const A: usize, Alloc: Allocator = Global>
+{
     base: *mut T,
     alloc: Alloc,
 }
 
-impl<T, const H: u32, const A: usize, Alloc: Allocator>
+impl<T, const H: usize, const A: usize, Alloc: Allocator>
     HamTree<T, H, A, Alloc>
 {
     /// The maximum number of leaves a tree can hold.
@@ -66,7 +67,7 @@ impl<T, const H: u32, const A: usize, Alloc: Allocator>
     const LAYOUT: Layout = tree_layout::<T>(H, A);
 }
 
-impl<T, const H: u32, const A: usize> HamTree<T, H, A>
+impl<T, const H: usize, const A: usize> HamTree<T, H, A>
 where
     T: Aggregate,
 {
@@ -82,7 +83,7 @@ where
     }
 }
 
-impl<T, const H: u32, const A: usize, Alloc> HamTree<T, H, A, Alloc>
+impl<T, const H: usize, const A: usize, Alloc> HamTree<T, H, A, Alloc>
 where
     T: Aggregate,
     Alloc: Allocator,
@@ -242,7 +243,7 @@ where
     }
 }
 
-impl<T, const H: u32, const A: usize, Alloc> Drop for HamTree<T, H, A, Alloc>
+impl<T, const H: usize, const A: usize, Alloc> Drop for HamTree<T, H, A, Alloc>
 where
     Alloc: Allocator,
 {
@@ -257,7 +258,7 @@ where
     }
 }
 
-const fn tree_layout<T>(height: u32, arity: usize) -> Layout {
+const fn tree_layout<T>(height: usize, arity: usize) -> Layout {
     let node_size = mem::size_of::<T>();
     let node_align = mem::align_of::<T>();
 
@@ -268,12 +269,15 @@ const fn tree_layout<T>(height: u32, arity: usize) -> Layout {
 }
 
 /// Number of leaves in a tree with the given height and arity.
-const fn n_tree_leaves(height: u32, arity: usize) -> usize {
-    arity.pow(height)
+const fn n_tree_leaves(height: usize, arity: usize) -> usize {
+    // SAFETY: it is safe to cast to `u32` a height larger than `u32::MAX` is
+    // pretty inconceivable anyway.
+    #[allow(clippy::cast_possible_truncation)]
+    arity.pow(height as u32)
 }
 
 /// Total number of nodes in a tree with the given height and arity.
-const fn n_tree_nodes(height: u32, arity: usize) -> usize {
+const fn n_tree_nodes(height: usize, arity: usize) -> usize {
     let mut n_nodes = 0;
 
     let mut h = 0;
