@@ -337,7 +337,7 @@ const fn n_tree_nodes(height: usize, arity: usize) -> usize {
     n_nodes
 }
 
-/// A branch of a `HamBranch`.
+/// A branch of a [`HamTree`].
 pub struct HamBranch<T, const H: usize, const A: usize> {
     root: T,
     levels: [[T; A]; H],
