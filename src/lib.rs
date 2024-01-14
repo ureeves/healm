@@ -154,7 +154,7 @@ where
     }
 
     fn empty(node: &T) -> Option<&T> {
-        if *node == unsafe { mem::zeroed::<T>() } {
+        if *node == empty_node::<T>() {
             None
         } else {
             Some(node)
@@ -192,10 +192,59 @@ where
         }
     }
 
+    /// Returns the branch at the given index, if any.
+    pub fn branch(&self, index: usize) -> Option<HamBranch<T, H, A>> {
+        if self.is_unallocated() {
+            return None;
+        }
+
+        // safety: we check that the tree is allocated above, so de-referencing
+        // is safe.
+        unsafe {
+            let mut level_ptr = self.base;
+            let mut index = index;
+
+            // If the leaf is empty, the branch doesn't exist
+            let leaf_ptr = level_ptr.add(index);
+            if *leaf_ptr == empty_node() {
+                return None;
+            }
+
+            let mut offsets = [0; H];
+            let mut levels: [[T; A]; H] = mem::zeroed();
+
+            // Propagate changes towards the root
+            let mut n_nodes = Self::N_LEAVES;
+            for h in 0..H {
+                let next_level_ptr = level_ptr.add(n_nodes);
+
+                let next_n_nodes = n_nodes / A;
+                let next_index = index / A;
+
+                let siblings_index = index - (index % A);
+                let siblings_ptr = level_ptr.add(siblings_index);
+                let siblings: *const [T; A] = siblings_ptr.cast();
+
+                offsets[h] = index - siblings_index;
+                levels[h] = ptr::read(siblings);
+
+                index = next_index;
+                n_nodes = next_n_nodes;
+
+                level_ptr = next_level_ptr;
+            }
+
+            Some(HamBranch {
+                root: ptr::read(level_ptr),
+                levels,
+                offsets,
+            })
+        }
+    }
+
     /// Returns the root of the tree.
     ///
     /// If no leaves have been inserted, it returns `None`.
-    #[must_use]
     pub fn root(&self) -> Option<&T> {
         if self.is_unallocated() {
             return None;
@@ -220,7 +269,6 @@ where
     /// This number is the same as [`N_LEAVES`].
     ///
     /// [`N_LEAVES`]: Self::N_LEAVES
-    #[must_use]
     pub const fn capacity(&self) -> usize {
         Self::N_LEAVES
     }
@@ -289,11 +337,59 @@ const fn n_tree_nodes(height: usize, arity: usize) -> usize {
     n_nodes
 }
 
+/// A branch of a `HamBranch`.
+pub struct HamBranch<T, const H: usize, const A: usize> {
+    root: T,
+    levels: [[T; A]; H],
+    offsets: [usize; H],
+}
+
+impl<T, const H: usize, const A: usize> HamBranch<T, H, A> {
+    /// Root of the branch.
+    pub fn root(&self) -> &T {
+        &self.root
+    }
+
+    /// Returns the nodes of the branch, from the bottom up.
+    pub fn levels(&self) -> &[[T; A]; H] {
+        &self.levels
+    }
+
+    /// Returns the offsets of the branch, from the bottom up.
+    pub fn offsets(&self) -> &[usize; H] {
+        &self.offsets
+    }
+}
+
+impl<T, const H: usize, const A: usize> HamBranch<T, H, A>
+where
+    T: Aggregate,
+{
+    /// Returns whether the given item is the leaf of the branch, and that the
+    /// branch is correct.
+    pub fn verify(&self, node: T) -> bool {
+        let mut node = node;
+
+        for h in 0..H {
+            let level = &self.levels[h];
+            let offset = self.offsets[h];
+
+            if node != level[offset] {
+                return false;
+            }
+
+            node = T::aggregate(level);
+        }
+
+        node == self.root
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use alloc::collections::BTreeSet;
+    use alloc::collections::{BTreeMap, BTreeSet};
 
     use paste::paste;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
@@ -341,7 +437,7 @@ mod tests {
                     }
 
                     #[test]
-                    fn get() {
+                    fn leaf() {
                         let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
 
                         let mut tree = Tree::new();
@@ -359,7 +455,7 @@ mod tests {
                     }
 
                     #[test]
-                    fn get_empty() {
+                    fn empty_leaf() {
                         let tree = Tree::new();
                         assert_eq!(tree.leaf(0), None);
                     }
@@ -388,9 +484,36 @@ mod tests {
                     }
 
                     #[test]
-                    fn leaves_empty() {
+                    fn empty_leaves() {
                         let tree = Tree::new();
                         assert_eq!(tree.leaves().count(), 0);
+                    }
+
+                    #[test]
+                    fn branch() {
+                        let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
+
+                        let mut tree = Tree::new();
+                        let mut index_map = BTreeMap::new();
+
+                        for _ in 0..N_INSERTIONS {
+                            let i = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
+                            let c = (rng.next_u64() % Tree::N_LEAVES as u64 + 1) as usize;
+                            index_map.insert(i, c);
+                            tree.insert(i, Count(c));
+                        }
+
+                        for (i, c) in index_map {
+                            let branch = tree.branch(i);
+                            assert!(matches!(branch, Some(b) if b.verify(Count(c))));
+                        }
+                    }
+
+                    #[test]
+                    fn empty_branch() {
+                        let tree = Tree::new();
+                        let branch = tree.branch(0);
+                        assert!(branch.is_none());
                     }
                 }
             }
