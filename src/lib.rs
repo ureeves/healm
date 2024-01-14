@@ -124,6 +124,8 @@ where
             let leaf_ptr = level_ptr.add(index);
             ptr::swap(leaf_ptr, &mut leaf);
 
+            let empty_children: [T; A] = mem::zeroed();
+
             // Propagate changes towards the root
             let mut n_nodes = Self::N_LEAVES;
             for _ in 0..H {
@@ -132,12 +134,19 @@ where
                 let next_n_nodes = n_nodes / A;
                 let next_index = index / A;
 
-                let siblings_index = index - (index % A);
-                let siblings_ptr = level_ptr.add(siblings_index);
-                let siblings: *const [T; A] = siblings_ptr.cast();
+                let children_index = index - (index % A);
+                let children_ptr = level_ptr.add(children_index);
+                let children: *const [T; A] = children_ptr.cast();
 
                 let parent_ptr = next_level_ptr.add(next_index);
-                *parent_ptr = T::aggregate(&*siblings);
+                // The new parent will be empty if all children are empty nodes,
+                // otherwise it will be the aggregate of the children.
+                let parent = if *children == empty_children {
+                    empty_node()
+                } else {
+                    T::aggregate(&*children)
+                };
+                *parent_ptr = parent;
 
                 index = next_index;
                 n_nodes = next_n_nodes;
@@ -221,12 +230,12 @@ where
                 let next_n_nodes = n_nodes / A;
                 let next_index = index / A;
 
-                let siblings_index = index - (index % A);
-                let siblings_ptr = level_ptr.add(siblings_index);
-                let siblings: *const [T; A] = siblings_ptr.cast();
+                let children_index = index - (index % A);
+                let children_ptr = level_ptr.add(children_index);
+                let children: *const [T; A] = children_ptr.cast();
 
-                offsets[h] = index - siblings_index;
-                levels[h] = ptr::read(siblings);
+                offsets[h] = index - children_index;
+                levels[h] = ptr::read(children);
 
                 index = next_index;
                 n_nodes = next_n_nodes;
@@ -498,14 +507,19 @@ mod tests {
 
                         for _ in 0..N_INSERTIONS {
                             let i = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
-                            let c = (rng.next_u64() % Tree::N_LEAVES as u64 + 1) as usize;
+                            let c = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
                             index_map.insert(i, c);
                             tree.insert(i, Count(c));
                         }
 
                         for (i, c) in index_map {
                             let branch = tree.branch(i);
-                            assert!(matches!(branch, Some(b) if b.verify(Count(c))));
+                            // The branch should not exist if the `mem::zeroed` leaf was inserted.
+                            if c == unsafe { mem::zeroed() } {
+                                assert!(branch.is_none());
+                            } else {
+                                assert!(matches!(branch, Some(b) if b.verify(Count(c))));
+                            }
                         }
                     }
 
