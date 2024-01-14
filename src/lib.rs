@@ -162,6 +162,15 @@ where
         }
     }
 
+    /// Removes the leaf at the given index, returning it if present.
+    pub fn remove(&mut self, index: usize) -> Option<T> {
+        if self.is_unallocated() {
+            return None;
+        }
+
+        self.insert(index, empty_node())
+    }
+
     fn empty(node: &T) -> Option<&T> {
         if *node == empty_node::<T>() {
             None
@@ -429,7 +438,7 @@ mod tests {
                     const N_INSERTIONS: usize = 100;
 
                     #[test]
-                    fn insertion() {
+                    fn insert() {
                         let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
 
                         let mut tree = Tree::new();
@@ -443,6 +452,27 @@ mod tests {
 
                         let n_insertions = index_set.len();
                         assert!(matches!(tree.root(), Some(x) if *x == Count(n_insertions)));
+                    }
+
+                    #[test]
+                    fn remove() {
+                        let mut rng = StdRng::seed_from_u64(0xBAAD_F00D);
+
+                        let mut tree = Tree::new();
+                        let mut index_set = BTreeSet::new();
+
+                        for _ in 0..N_INSERTIONS {
+                            let i = (rng.next_u64() % Tree::N_LEAVES as u64) as usize;
+                            index_set.insert(i);
+                            tree.insert(i, Count(1));
+                        }
+
+                        for i in index_set {
+                            tree.remove(i);
+                            assert!(tree.leaf(i).is_none());
+                        }
+
+                        assert!(tree.root().is_none());
                     }
 
                     #[test]
