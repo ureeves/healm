@@ -6,7 +6,7 @@ keywords = ["merkle", "tree", "hash", "data", "structure"]
 
 repository = "https://github.com/ureeves/healm"
 authors = ["Eduardo Leegwater Simões <eduardols@protonmail.com>"]
-version = "0.1.0"
+version = "0.2.0"
 
 edition = "2021"
 license = "MIT"
