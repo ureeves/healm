@@ -103,8 +103,8 @@ where
     /// element occupying the position, if any.
     ///
     /// # Panics
-    /// Panics if `index >= capacity`, or the underlying allocator fails if it
-    /// is the first insertion.
+    /// If `index >= capacity`, or the underlying allocator fails if it is the
+    /// first insertion.
     pub fn insert(&mut self, index: usize, leaf: T) -> Option<T> {
         assert!(index < Self::N_LEAVES, "Index out of bounds");
 
@@ -294,7 +294,7 @@ where
     /// Ensures that the tree is allocated.
     ///
     /// # Panics
-    /// Panics if the underlying allocator fails.
+    /// If the underlying allocator fails.
     fn ensure_allocated(&mut self) {
         if self.is_unallocated() {
             match self.alloc.allocate_zeroed(Self::LAYOUT) {
